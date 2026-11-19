@@ -14,7 +14,7 @@ header b{font-size:18px}
 #sc{display:flex;gap:6px;align-items:center}
 .coin{width:16px;height:16px;border-radius:50%;background:#fcc928;border:2px solid #e0a000;display:inline-block}
 #wrap{flex:1;position:relative;min-height:0}
-canvas{width:100%;height:100%;display:block}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:manipulation}
 #bar{display:flex;justify-content:center;align-items:center;gap:18px;padding:12px 0 6px}
 #pw{text-align:center;font-size:13px;color:var(--mut);padding:0 0 12px;letter-spacing:.3px}
 #go{width:96px;height:96px;border-radius:50%;border:none;background:var(--btn);box-shadow:0 0 0 6px #fde48a88;font-size:42px;color:var(--btn2);cursor:pointer}
@@ -31,11 +31,13 @@ li{display:flex;gap:8px;padding:7px 10px;border-radius:10px;margin-bottom:4px;fo
 li.me{background:var(--row)}
 li .n{width:26px;color:var(--mut)}li .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 small{color:var(--mut)}
+#rv{text-align:center;font-size:14px;padding:0 12px 4px;color:var(--mut)}
 .hide{display:none!important}
 </style>
 </head>
 <body>
 <header><span>Level <b id="lv">1</b></span><span id="sc"><b id="score">0</b><i class="coin"></i></span></header>
+<div id="rv" class="hide"></div>
 <div id="wrap">
 <canvas id="c"></canvas>
 <button id="mute" aria-label="sound">🔊</button>
@@ -70,7 +72,7 @@ let st='idle',level=1,score=0,ang=-Math.PI/2,dir=1,coins=[],balls=[],parts=[],sp
 const N=36;
 function speed(){return Math.min(4.2,1.5+level*.22)}
 function resetCoins(){coins=[];for(let i=0;i<N;i++)coins.push({a:i/N*Math.PI*2,on:true})}
-function begin(){ac();level=1;score=0;ang=-Math.PI/2;dir=1;balls=[];parts=[];spawnT=1.2;combo=0;resetCoins();st='play';$('lv').textContent=1;$('score').textContent=0;$('ov').classList.add('hide');setGo('flip');sfx.start()}
+function begin(){ac();level=1;score=0;ang=-Math.PI/2;dir=1;balls=[];parts=[];spawnT=1.2;combo=0;resetCoins();st='play';$('lv').textContent=1;$('score').textContent=0;$('ov').classList.add('hide');setGo('flip');sfx.start();push(1,'play')}
 function setGo(m){$('go').textContent=m==='flip'?'⇄':m==='retry'?'↻':'▶'}
 function norm(a){a%=Math.PI*2;return a<0?a+Math.PI*2:a}
 function spawn(){
@@ -83,9 +85,11 @@ function spawn(){
   balls.push({x:sx,y:sy,vx:(tx-sx)/d*v,vy:(ty-sy)/d*v,t:0});sfx.shot()}
 function boom(x,y,n,cols){for(let i=0;i<n;i++){const a=i/n*6.28,v=50+Math.random()*50;parts.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,l:.3+Math.random()*.15,c:cols[i%cols.length],r:4+Math.random()*2})}}
 function die(){st='dead';sfx.boom();const sx=CX+Math.cos(ang)*R,sy=CY+Math.sin(ang)*R;boom(sx,sy,14,['#ff4d2e','#ffb02e']);shake=.5;dead=0;setGo('retry');setTimeout(over,900)}
-function next(){level++;$('lv').textContent=level;sfx.level();resetCoins();flash=1;balls=[];spawnT=1.4}
+function next(){level++;push(1,'play');$('lv').textContent=level;sfx.level();resetCoins();flash=1;balls=[];spawnT=1.4}
 function flip(){if(st==='idle'||st==='over'){begin();return}if(st!=='play')return;dir*=-1;sfx.flip()}
-$('go').addEventListener('pointerdown',e=>{e.preventDefault();ac();if(st==='dead')return;flip()});
+let tl=0;const press=e=>{e.preventDefault();const n=Date.now();if(n-tl<150)return;tl=n;ac();if(st==='dead')return;flip()};
+['pointerdown','touchstart','mousedown'].forEach(ev=>$('go').addEventListener(ev,press,{passive:false}));
+$('wrap').addEventListener('pointerdown',e=>{if(st==='play')press(e)});
 addEventListener('keydown',e=>{if(e.code==='Space'||e.key==='Enter'){e.preventDefault();if(st!=='dead')flip()}});
 
 /* ---------- update / draw ---------- */
@@ -96,7 +100,7 @@ function update(dt){
   ang=norm(ang+dir*speed()*dt);
   spawnT-=dt;if(spawnT<=0){spawn();if(level>=3&&Math.random()<Math.min(.7,(level-2)*.15))setTimeout(()=>{if(st==='play')spawn()},180);if(level>=6&&Math.random()<.35)setTimeout(()=>{if(st==='play')spawn()},350);spawnT=Math.max(.3,1.5-level*.16)*(.7+Math.random()*.6)}
   const sx=CX+Math.cos(ang)*R,sy=CY+Math.sin(ang)*R;
-  for(const c of coins){if(!c.on)continue;let d=Math.abs(norm(c.a)-ang);d=Math.min(d,Math.PI*2-d);if(d<.1){c.on=false;score++;combo++;$('score').textContent=score;sfx.coin(combo);boom(CX+Math.cos(c.a)*R,CY+Math.sin(c.a)*R,4,['#fcc928'])}}
+  for(const c of coins){if(!c.on)continue;let d=Math.abs(norm(c.a)-ang);d=Math.min(d,Math.PI*2-d);if(d<.1){c.on=false;score++;combo++;$('score').textContent=score;sfx.coin(combo);push();boom(CX+Math.cos(c.a)*R,CY+Math.sin(c.a)*R,4,['#fcc928'])}}
   for(const b of balls){b.x+=b.vx*dt;b.y+=b.vy*dt;b.t+=dt;
     if(Math.hypot(b.x-sx,b.y-sy)<S*.036&&st==='play'){die();return}}
   balls=balls.filter(b=>Math.hypot(b.x-CX,b.y-CY)<S*.9&&b.t<4);
@@ -154,17 +158,34 @@ function render(){
     (myName?'':'<input id="nm" maxlength="14" placeholder="Enter your name">')+'<h2 style="font-size:17px;margin-top:10px">Leaderboard</h2>'+listHTML()+'<button class="pb" id="again">Play again ↻</button>'}
   else{
     c.innerHTML='<h2>⚓ Corsairs</h2><small>Collect the coins, dodge the cannonballs. Tap ⇄ to reverse your ship. Every level gets harder.</small>'+(myName?'':'<input id="nm" maxlength="14" placeholder="Enter your name">')+'<h2 style="font-size:17px;margin-top:10px">Top players</h2>'+listHTML()+'<button class="pb" id="again">▶ Play</button>'}
-  $('again').onclick=()=>{saveName();begin()}}
+  $('again').onclick=()=>{saveName();begin()};extras()}
 function saveName(){const i=$('nm');if(i&&i.value.trim()){myName=i.value.trim().slice(0,14);try{localStorage.setItem('corsairs_name',myName)}catch(e){}}}
 async function over(){
-  st='over';saveName();if(!myName)myName='Player';
+  st='over';saveName();if(!myName)myName='Player';push(1,'done');
   const nb=score>best;if(nb){best=score;try{localStorage.setItem('corsairs_best',best)}catch(e){}}
   render();$('ov').classList.remove('hide');
   if(db&&uid&&score>0){try{const ref=db.doc('scores/'+uid);const s=await ref.get();const old=s.exists?s.data():{};
     await ref.set({name:myName,best:Math.max(+old.best||0,score),plays:(+old.plays||0)+1,ts:Date.now()});}catch(e){}}
   else if(db&&uid){try{const ref=db.doc('scores/'+uid);const s=await ref.get();if(s.exists)await ref.update({plays:(+s.data().plays||0)+1})}catch(e){}}
 }
-fit();render();requestAnimationFrame(loop);initDb();
+/* ---------- play with a friend (live room) ---------- */
+let RM=null,room=null,code='',lastPush=0;
+const BASE='https://claude.ai/artifact/XzxUbH5mZan6HtPNoWunWd';
+function rival(){if(!room)return null;try{return room.peers().find(p=>!p.isMe&&!p.sameTab)||null}catch(e){return null}}
+function push(force,state){if(!room)return;const n=Date.now();if(!force&&n-lastPush<250)return;lastPush=n;try{room.presence({name:myName||'Player',score:score,level:level,state:state||(st==='play'?'play':'idle')}).catch(()=>{})}catch(e){}}
+function refreshRv(){const el=$('rv');if(!room){el.classList.add('hide');return}el.classList.remove('hide');const r=rival();if(!r){el.textContent='👥 Room '+code+' · waiting for a friend…'}else{const p=r.presence||{};el.textContent='👥 '+(p.name||'Friend')+': '+(+p.score||0)+' · Lv '+(+p.level||1)+(p.state==='done'?' · finished':'')}if(!$('ov').classList.contains('hide'))render()}
+function vsText(){const r=rival();if(!r)return 'Waiting for a friend to join…';const p=r.presence||{},nm=p.name||'Friend';if(st!=='over')return nm+' is in the room';if(p.state!=='done')return 'Waiting for '+nm+' to finish… ('+(+p.score||0)+')';const a=score,b=+p.score||0;return a>b?'🏆 You beat '+nm+'! '+a+' – '+b:a<b?nm+' wins '+b+' – '+a:'Draw '+a+' – '+b}
+function extras(){const c=$('card');const box=document.createElement('div');box.style.marginTop='10px';
+  if(room){const t=document.createElement('div');t.style.cssText='font-size:15px;margin:6px 0';t.textContent=st==='over'?vsText():'Room '+code+' · '+vsText();box.appendChild(t);const b=document.createElement('button');b.className='pb';b.textContent='🔗 Share invite link';b.onclick=share;box.appendChild(b)}
+  else if(RM){const b=document.createElement('button');b.className='pb';b.style.cssText='background:transparent;border:2px solid var(--btn)';b.textContent='👥 Play with a friend';b.onclick=invite;box.appendChild(b)}
+  c.appendChild(box)}
+async function joinRoom(cd){try{if(!RM)RM=await claude.use('room');if(!RM)return false;if(room)await room.leave();room=await RM.join('g-'+cd);code=cd;room.onPeers(refreshRv);await room.presence({name:myName||'Player',score:0,level:1,state:'idle'});location.hash='room-'+cd;refreshRv();return true}catch(e){return false}}
+function genCode(){const s='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let o='';for(let i=0;i<4;i++)o+=s[Math.floor(Math.random()*s.length)];return o}
+async function invite(){saveName();const ok=await joinRoom(genCode());if(ok)share();else{const s=document.createElement('small');s.textContent=' Friend mode is unavailable here.';$('card').appendChild(s)}}
+function copyLink(url){if(navigator.clipboard)navigator.clipboard.writeText(url).then(()=>{$('rv').classList.remove('hide');$('rv').textContent='Link copied: '+url},()=>{})}
+function share(){const url=BASE+'#room-'+code;if(navigator.share){navigator.share({title:'Corsairs',text:'Race me in Corsairs! Room '+code,url:url}).catch(()=>copyLink(url))}else copyLink(url)}
+async function initRoom(){try{RM=await claude.use('room')}catch(e){}if(!RM)return;const m=/^#room-([A-Z0-9]{4})$/.exec(location.hash);if(m)await joinRoom(m[1]);if(!$('ov').classList.contains('hide'))render()}
+fit();render();requestAnimationFrame(loop);initDb();initRoom();
 })();
 </script>
 </body>
